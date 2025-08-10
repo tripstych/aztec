@@ -70,9 +70,15 @@ function bookings_fetch_and_store_vehicle_data() {
    global $wpdb;
    // Fetch manufacturers
    $manu_response = wp_remote_get('https://vpic.nhtsa.dot.gov/api/vehicles/getallmanufacturers?format=json');
-   if (is_wp_error($manu_response)) return;
-   $manu_data = json_decode(wp_remote_retrieve_body($manu_response), true);
+   if (is_wp_error($manu_response)) {
+      error_log('Error fetching manufacturers: ' . $manu_response->get_error_message());
+      return;
+   }
+   $manu_body = wp_remote_retrieve_body($manu_response);
+   error_log('Manufacturers API response: ' . substr($manu_body, 0, 1000));
+   $manu_data = json_decode($manu_body, true);
    if (!empty($manu_data['Results'])) {
+      error_log('Manufacturers count: ' . count($manu_data['Results']));
       foreach ($manu_data['Results'] as $manufacturer) {
          $manufacturer_id = intval($manufacturer['Mfr_ID']);
          $manufacturer_name = sanitize_text_field($manufacturer['Mfr_CommonName'] ?: $manufacturer['Mfr_Name']);
@@ -89,15 +95,24 @@ function bookings_fetch_and_store_vehicle_data() {
             );
          }
       }
+   } else {
+      error_log('No manufacturers found in API response.');
    }
 
    // Fetch makes for each manufacturer
    $manufacturers = $wpdb->get_results("SELECT manufacturer_id, name FROM {$wpdb->prefix}bookings_manufacturers");
+   error_log('Manufacturers in DB: ' . count($manufacturers));
    foreach ($manufacturers as $manu) {
       $makes_response = wp_remote_get('https://vpic.nhtsa.dot.gov/api/vehicles/GetMakeForManufacturer/' . urlencode($manu->name) . '?format=json');
-      if (is_wp_error($makes_response)) continue;
-      $makes_data = json_decode(wp_remote_retrieve_body($makes_response), true);
+      if (is_wp_error($makes_response)) {
+         error_log('Error fetching makes for ' . $manu->name . ': ' . $makes_response->get_error_message());
+         continue;
+      }
+      $makes_body = wp_remote_retrieve_body($makes_response);
+      error_log('Makes API response for ' . $manu->name . ': ' . substr($makes_body, 0, 1000));
+      $makes_data = json_decode($makes_body, true);
       if (!empty($makes_data['Results'])) {
+         error_log('Makes count for ' . $manu->name . ': ' . count($makes_data['Results']));
          foreach ($makes_data['Results'] as $make) {
             $make_id = intval($make['Make_ID']);
             $make_name = sanitize_text_field($make['Make_Name']);
@@ -115,16 +130,25 @@ function bookings_fetch_and_store_vehicle_data() {
                );
             }
          }
+      } else {
+         error_log('No makes found for manufacturer ' . $manu->name);
       }
    }
 
    // Fetch types for each make
    $makes = $wpdb->get_results("SELECT make_id, name FROM {$wpdb->prefix}bookings_makes");
+   error_log('Makes in DB: ' . count($makes));
    foreach ($makes as $make) {
       $types_response = wp_remote_get('https://vpic.nhtsa.dot.gov/api/vehicles/GetVehicleTypesForMake/' . urlencode($make->name) . '?format=json');
-      if (is_wp_error($types_response)) continue;
-      $types_data = json_decode(wp_remote_retrieve_body($types_response), true);
+      if (is_wp_error($types_response)) {
+         error_log('Error fetching types for ' . $make->name . ': ' . $types_response->get_error_message());
+         continue;
+      }
+      $types_body = wp_remote_retrieve_body($types_response);
+      error_log('Types API response for ' . $make->name . ': ' . substr($types_body, 0, 1000));
+      $types_data = json_decode($types_body, true);
       if (!empty($types_data['Results'])) {
+         error_log('Types count for ' . $make->name . ': ' . count($types_data['Results']));
          foreach ($types_data['Results'] as $type) {
             $type_name = sanitize_text_field($type['VehicleTypeName']);
             if ($type_name) {
@@ -140,6 +164,8 @@ function bookings_fetch_and_store_vehicle_data() {
                );
             }
          }
+      } else {
+         error_log('No types found for make ' . $make->name);
       }
    }
 }
@@ -162,6 +188,7 @@ function bookings_settings_page() {
    echo '<div class="wrap"><h1>Bookings Data</h1>';
    echo '<h2>Manufacturers</h2>';
    $manufacturers = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}bookings_manufacturers LIMIT 20");
+   echo '<pre>Debug: Manufacturers in DB: ' . count($manufacturers) . '</pre>';
    if ($manufacturers) {
       echo '<ul>';
       foreach ($manufacturers as $m) {
@@ -174,6 +201,7 @@ function bookings_settings_page() {
 
    echo '<h2>Makes</h2>';
    $makes = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}bookings_makes LIMIT 20");
+   echo '<pre>Debug: Makes in DB: ' . count($makes) . '</pre>';
    if ($makes) {
       echo '<ul>';
       foreach ($makes as $m) {
@@ -186,6 +214,7 @@ function bookings_settings_page() {
 
    echo '<h2>Types</h2>';
    $types = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}bookings_types LIMIT 20");
+   echo '<pre>Debug: Types in DB: ' . count($types) . '</pre>';
    if ($types) {
       echo '<ul>';
       foreach ($types as $t) {
