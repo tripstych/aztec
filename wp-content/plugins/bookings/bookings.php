@@ -32,12 +32,64 @@
    Create a wordpress plugin settings page to display the data we have
    include a button to refresh the data
 */
+$tables = [
+      "{$wpdb->prefix}bookings_manufacturers",
+      "{$wpdb->prefix}bookings_makes",
+      "{$wpdb->prefix}bookings_types",
+      "{$wpdb->prefix}bookings_models"
+   ];
+
+function bookings_drop_vehicle_tables() {
+   global $wpdb;
+   foreach ($tables as $table) {
+      $wpdb->query("DROP TABLE IF EXISTS $table");
+   }
+}   
+
+/// /api/vehicles/GetModelsForMake/{make}?format=json
+function booking_models_build_data() {
+    global $wpdb;
+    $makes = $wpdb->get_results("SELECT make_id, name FROM {$wpdb->prefix}bookings_makes");
+    foreach ($makes as $make) {
+        $response = wp_remote_get("https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/{$make->name}?format=json");
+        if (is_wp_error($response)) {
+            error_log('Error fetching models: ' . $response->get_error_message());
+            continue;
+        }
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        if (!empty($data['Results'])) {
+            foreach ($data['Results'] as $model) {
+                $wpdb->insert(
+                    $wpdb->prefix . 'bookings_models',
+                    [
+                        'model_id' => intval($model['Model_ID']),
+                        'make_id' => $make->make_id,
+                        'name' => sanitize_text_field($model['Model_Name'])
+                    ],
+                    [
+                        '%d', '%d', '%s'
+                    ]
+                );
+            }
+        }
+    }
+}
+
 
 // Create custom tables for manufacturers, makes, and types
 function bookings_create_vehicle_tables() {
    global $wpdb;
    $charset_collate = $wpdb->get_charset_collate();
    $tables = [
+    // create a table for all models for each make
+    "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}bookings_models (
+       id INT NOT NULL AUTO_INCREMENT,
+       model_id INT,
+       make_id INT,
+       name VARCHAR(255) UNIQUE,
+       PRIMARY KEY (id)
+    ) $charset_collate;",
       "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}bookings_manufacturers (
          id INT NOT NULL AUTO_INCREMENT,
          manufacturer_id INT,
@@ -225,9 +277,16 @@ function bookings_settings_page() {
       echo '<p>No types found.</p>';
    }
    echo '<form method="post"><input type="submit" name="refresh_vehicle_data" class="button-primary" value="Refresh Data"></form>';
+   echo '<form method="post"><input type="submit" name="booking_models_build_data" class="button-primary" value="Booking Models"></form>';
+
    if (isset($_POST['refresh_vehicle_data'])) {
+      bookings_drop_vehicle_tables();
+      bookings_create_vehicle_tables();
       bookings_fetch_and_store_vehicle_data();
       echo '<div class="updated"><p>Vehicle data refreshed!</p></div>';
+   }
+   if (isset($_POST['booking_models_build_data'])) {
+      booking_models_build_data();
    }
    echo '</div>';
 }
