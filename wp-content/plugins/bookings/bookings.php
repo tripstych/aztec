@@ -39,6 +39,60 @@ function aztec_initialize_booking_form() {
 }
 add_action('wp_enqueue_scripts', 'aztec_initialize_booking_form');
 
+// Add settings link to plugin row
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'aztec_bookings_plugin_action_links');
+function aztec_bookings_plugin_action_links($links) {
+    $settings_link = '<a href="options-general.php?page=aztec-bookings-settings">Settings</a>';
+    array_unshift($links, $settings_link);
+    return $links;
+}
+
+// Add settings page to admin
+add_action('admin_menu', function() {
+    add_options_page('Aztec Bookings Settings', 'Aztec Bookings', 'manage_options', 'aztec-bookings-settings', 'aztec_bookings_settings_page');
+});
+
+function aztec_bookings_settings_page() {
+    global $wpdb;
+    echo '<div class="wrap"><h1>Aztec Bookings Data</h1>';
+    echo '<h2>Manufacturers</h2>';
+    $manufacturers = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}aztec_manufacturers LIMIT 20");
+    if ($manufacturers) {
+        echo '<ul>';
+        foreach ($manufacturers as $m) {
+            echo '<li>' . esc_html($m->name) . ' (ID: ' . esc_html($m->manufacturer_id) . ')</li>';
+        }
+        echo '</ul>';
+    } else {
+        echo '<p>No manufacturers found.</p>';
+    }
+
+    echo '<h2>Makes</h2>';
+    $makes = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}aztec_makes LIMIT 20");
+    if ($makes) {
+        echo '<ul>';
+        foreach ($makes as $m) {
+            echo '<li>' . esc_html($m->name) . ' (ID: ' . esc_html($m->make_id) . ')</li>';
+        }
+        echo '</ul>';
+    } else {
+        echo '<p>No makes found.</p>';
+    }
+
+    echo '<h2>Types</h2>';
+    $types = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}aztec_types LIMIT 20");
+    if ($types) {
+        echo '<ul>';
+        foreach ($types as $t) {
+            echo '<li>' . esc_html($t->name) . '</li>';
+        }
+        echo '</ul>';
+    } else {
+        echo '<p>No types found.</p>';
+    }
+    echo '</div>';
+}
+
 // Create custom tables for manufacturers, makes, and types
 function aztec_create_vehicle_tables() {
     global $wpdb;
