@@ -9,7 +9,7 @@
     License: GPL2
     */
 	function booking_shortcut() {
-		return "<h1>Success: Booking Shortcode</h1>";
+		return "<h2>Success: Booking Shortcode</h2>";
 	}
 
 	function bw_activate() {
